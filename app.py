@@ -177,10 +177,10 @@ if not st.session_state.entered:
 <div class="hero" style="text-align:center; padding:48px 30px;">
   <div class="title"><span class="drop">💧</span> <span class="typing">Waterlogging Hotspot Detection using LiDAR</span></div>
   <div class="sub">IIT Roorkee Campus</div>
-  <div class="badge">Made by Team 11 for CEC-201 Geospatial Project</div>
+  <div class="badge">Made by Team 11 for CEC-201 Geospatial Engineering-II Project</div>
 </div>
-<div class="intro-card"><div class="label">Team Leader</div><div class="name">Zubia Hasan</div></div>
 <div class="intro-card"><div class="label">Made by</div><div class="name">Sneha Verma</div></div>
+<div class="intro-card"><div class="label">Team Leader</div><div class="name">Zubia Hasan</div></div>
 <div class="intro-card"><div class="label">Other Team Members</div>
   <div class="member">Shoryajeet</div><div class="member">Suryavardhan</div>
   <div class="member">Vaibhav</div><div class="member">Yash</div></div>
