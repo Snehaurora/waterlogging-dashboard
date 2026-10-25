@@ -75,7 +75,7 @@ button[data-baseweb="tab"] {font-size:1.05rem;}
   background:url("WAVE") repeat-x; background-size:50% 100%; animation:waveShift 2s linear infinite;}
 .water.rise {animation:riseWater 3s ease-in forwards;}
 .water.drain {animation:drainWater 2.4s ease-out forwards; pointer-events:none;}
-.water.slow {animation:slowRise 50s linear 10s forwards; opacity:.55; z-index:6; pointer-events:none;}
+.water.slow {animation:slowRise 50s linear 3s forwards; opacity:.55; z-index:6; pointer-events:none;}
 .bubble {position:fixed; bottom:-20px; border-radius:50%; z-index:999991;
   border:2px solid rgba(255,255,255,.7); background:rgba(255,255,255,.2); animation:bubbleUp 3s ease-in infinite;}
 .flood-text {position:fixed; top:42%; left:0; width:100vw; text-align:center; z-index:999992; color:white;
@@ -96,7 +96,7 @@ INTRO_CSS = """
 @keyframes drizzleIn {from {opacity:0;} to {opacity:1;}}
 @keyframes drizzleFall {from {transform:translateY(-30px);} to {transform:translateY(105vh);}}
 @keyframes typing {to {width:44ch;}}
-@keyframes caret {50% {border-color:transparent;}}
+@keyframes caretGone {0%,99% {border-color:#fff;} 100% {border-color:transparent;}}
 @keyframes ripple {0% {box-shadow:0 0 0 0 rgba(0,198,255,.85);} 100% {box-shadow:0 0 0 24px rgba(0,198,255,0);}}
 
 .stApp {background:linear-gradient(180deg,#060f1c 0%,#0d2540 55%,#16406b 100%) !important;}
@@ -118,13 +118,15 @@ INTRO_CSS = """
   clip-path:polygon(50% 0, 78% 0, 58% 36%, 82% 36%, 30% 100%, 42% 52%, 20% 52%);
   animation:boltFlash 10s infinite;}
 
-/* 3) drizzle fades in after the lightning */
-.drizzle {position:fixed; inset:0; z-index:5; pointer-events:none; opacity:0; animation:drizzleIn 4s ease 8s forwards;}
+/* 3) drizzle fades in after 2 seconds */
+.drizzle {position:fixed; inset:0; z-index:5; pointer-events:none; opacity:0; animation:drizzleIn 1s ease 2s forwards;}
 .dz {position:absolute; top:0; width:1px; height:14px; animation:drizzleFall linear infinite;
   background:linear-gradient(to bottom, rgba(255,255,255,0), rgba(190,225,255,.75));}
 
+/* heading types out, then the cursor disappears for good */
 .typing {display:inline-block; overflow:hidden; white-space:nowrap; vertical-align:bottom; width:0;
-  border-right:3px solid #fff; animation:typing 3s steps(42) forwards, caret .7s step-end infinite;}
+  border-right:3px solid #fff; animation:typing 3s steps(42) forwards, caretGone 3s linear forwards;}
+
 button[kind="primary"], button[data-testid="stBaseButton-primary"] {animation:ripple 1.6s infinite; border-radius:8px;}
 .intro-card {max-width:760px; margin:10px auto; padding:22px 30px; border-radius:16px; color:white;
   background:rgba(30,144,255,.14); border:1px solid rgba(120,190,255,.45); backdrop-filter:blur(3px);
@@ -174,16 +176,32 @@ if not st.session_state.entered:
     )
     st.markdown(
         """
+<style>
+.foot {text-align:center; color:#cfe3f7; margin:22px 0 6px; font-size:1.05rem; animation:fadeUp 1.4s ease;}
+.intro-card .ptitle {font-size:1.45rem; font-weight:700; margin-top:6px; line-height:1.35;}
+</style>
+
 <div class="hero" style="text-align:center; padding:48px 30px;">
   <div class="title"><span class="drop">💧</span> <span class="typing">Waterlogging Hotspot Detection using LiDAR</span></div>
-  <div class="sub">IIT Roorkee Campus</div>
-  <div class="badge">Made by Team 11 for CEC-201 Geospatial Engineering-II Project</div>
+  <div class="badge">CEC-201 · Geospatial Engineering II · Term Project · AY 2026-27</div>
 </div>
-<div class="intro-card"><div class="label">Made by</div><div class="name">Sneha Verma</div></div>
-<div class="intro-card"><div class="label">Team Leader</div><div class="name">Zubia Hasan</div></div>
-<div class="intro-card"><div class="label">Other Team Members</div>
-  <div class="member">Shoryajeet</div><div class="member">Suryavardhan</div>
-  <div class="member">Vaibhav</div><div class="member">Yash</div></div>
+
+<div class="intro-card">
+  <div class="label">Project</div>
+  <div class="ptitle">Identification of Waterlogging Locations Using LiDAR</div>
+</div>
+
+<div class="intro-card">
+  <div class="label">Course</div>
+  <div class="name">CEC-201: Geospatial Engineering II</div>
+</div>
+
+<div class="intro-card">
+  <div class="label">Under the Guidance of</div>
+  <div class="name">Prof. Prakhar Misra</div>
+</div>
+
+<div class="foot">Made with ❤️ by Team 11</div>
 """,
         unsafe_allow_html=True,
     )
@@ -212,11 +230,11 @@ gdf = gpd.read_file(BASE / "data" / "hotspots.geojson")
 with open(BASE / "data" / "metrics.json") as f:
     metrics = json.load(f)
 is_sample = bool(gdf["is_sample"].any()) if "is_sample" in gdf.columns else False
-COLORS = {"Low": "#f1c40f", "Medium": "#e67e22", "High": "#c0392b"}
+COLORS = {"Dry": "#95a5a6", "Low": "#f1c40f", "Medium": "#e67e22", "High": "#c0392b"}
 
 
-def severity(d):
-    return "Low" if d < 0.3 else "Medium" if d < 0.6 else "High"
+def severity(frac):
+    return "Dry" if frac < 0.05 else "Low" if frac < 0.35 else "Medium" if frac < 0.7 else "High"
 
 
 def card(label, value, dec=False):
@@ -235,33 +253,40 @@ def gauge(label, v):
 badge = '<div class="badge">SAMPLE DATA - not real results</div>' if is_sample else ""
 st.markdown(
     f"""<div class="hero"><div class="title"><span class="drop">💧</span> Waterlogging Hotspots - IIT Roorkee</div>
-<div class="sub">LiDAR-based depression detection: where water collects on campus, how deep, and how much.</div>{badge}</div>
+<div class="sub">LiDAR-based depression detection: where water can collect on campus, how deep, and how much.</div>{badge}</div>
 <div class="wave"></div>""",
     unsafe_allow_html=True,
 )
 
 # ================= SIDEBAR =================
-st.sidebar.header("Rainfall replay")
+st.sidebar.header("Rainfall scenario")
 rain = st.sidebar.slider("Rainfall (mm)", 0, 200, 100, 10,
-                         help="Illustrative: depths and volumes are scaled linearly from the 100 mm result.")
-scale = rain / 100
-gdf["depth_m"] = (gdf["depth_m"] * scale).round(2)
-gdf["volume_m3"] = (gdf["volume_m3"] * scale).round(1)
-gdf["severity"] = gdf["depth_m"].apply(severity)
+                         help="Illustrative scenario: hotspot locations are fixed, only how full they are changes.")
+catch = st.sidebar.slider("Catchment ratio", 5, 100, 30,
+                          help="Assumed catchment area as a multiple of each hotspot's area (illustrative).")
+
+full_depth = gdf["depth_m"].copy()
+full_vol = gdf["volume_m3"].copy()
+inflow = (rain / 1000.0) * gdf["area_m2"] * catch          # m3 of rain reaching each hotspot
+frac = (inflow / full_vol.clip(lower=0.01)).clip(0, 1)     # 0 = empty, 1 = full
+gdf["volume_m3"] = (full_vol * frac).round(1)
+gdf["depth_m"] = (full_depth * frac ** 0.5).round(2)
+gdf["fill_pct"] = (frac * 100).round(0)
+gdf["severity"] = frac.apply(severity)
 
 st.sidebar.header("Filters")
-min_depth = st.sidebar.slider("Minimum depth (m)", 0.0, 1.0, 0.0, 0.05)
+min_depth = st.sidebar.slider("Minimum full depth (m)", 0.0, 1.0, 0.0, 0.05)
 min_area = st.sidebar.slider("Minimum area (m2)", 0, 1000, 0, 10)
-levels = st.sidebar.multiselect("Severity", ["Low", "Medium", "High"], default=["Low", "Medium", "High"])
+levels = st.sidebar.multiselect("Severity", ["Dry", "Low", "Medium", "High"],
+                                default=["Dry", "Low", "Medium", "High"])
 st.sidebar.header("Map options")
 style = st.sidebar.radio("Map style", ["Street", "Satellite", "Dark"])
 show_pulse = st.sidebar.checkbox("Ripple markers", value=True)
-show_flow = st.sidebar.checkbox("Flowing water lines (illustrative)", value=True)
+show_flow = st.sidebar.checkbox("Flowing water lines (illustrative, slow with many hotspots)", value=False)
 
-filtered = gdf[(gdf["depth_m"] > 0) & (gdf["depth_m"] >= min_depth) & (gdf["area_m2"] >= min_area)
-               & (gdf["severity"].isin(levels))]
+filtered = gdf[(full_depth >= min_depth) & (gdf["area_m2"] >= min_area) & (gdf["severity"].isin(levels))]
 if filtered.empty:
-    st.info("No hotspots match these filters. Raise the rainfall, lower the sliders or add severity levels.")
+    st.info("No hotspots match these filters. Lower the sliders or add severity levels.")
     st.stop()
 focus = st.sidebar.selectbox("Focus on hotspot", ["All hotspots"] + filtered["id"].tolist())
 
@@ -271,8 +296,8 @@ tab_map, tab_chart, tab_table, tab_metrics = st.tabs(["🗺️ Map", "📊 Chart
 with tab_map:
     c = st.columns(4)
     c[0].markdown(card("Hotspots shown", len(filtered)), unsafe_allow_html=True)
-    c[1].markdown(card("Total volume (m3)", round(filtered["volume_m3"].sum())), unsafe_allow_html=True)
-    c[2].markdown(card("Deepest (m)", float(filtered["depth_m"].max()), dec=True), unsafe_allow_html=True)
+    c[1].markdown(card("Water volume now (m3)", round(filtered["volume_m3"].sum())), unsafe_allow_html=True)
+    c[2].markdown(card("Deepest now (m)", float(filtered["depth_m"].max()), dec=True), unsafe_allow_html=True)
     c[3].markdown(card("High severity", int((filtered["severity"] == "High").sum())), unsafe_allow_html=True)
     st.write("")
 
@@ -307,17 +332,20 @@ path.leaflet-interactive {transform-box:fill-box; transform-origin:center; anima
     m.get_root().html.add_child(folium.Element("""
 <div style="position:fixed; bottom:25px; left:25px; z-index:9999; background:rgba(255,255,255,.93);
      padding:10px 14px; border-radius:10px; font-size:13px; color:#222; box-shadow:0 2px 8px rgba(0,0,0,.3);">
-<b>Water depth</b><br><span style="color:#f1c40f">&#9679;</span> Low (&lt; 0.3 m)<br>
-<span style="color:#e67e22">&#9679;</span> Medium (0.3 - 0.6 m)<br>
-<span style="color:#c0392b">&#9679;</span> High (&gt; 0.6 m)</div>"""))
+<b>Fill level</b><br>
+<span style="color:#95a5a6">&#9679;</span> Dry (&lt; 5%)<br>
+<span style="color:#f1c40f">&#9679;</span> Low (&lt; 35%)<br>
+<span style="color:#e67e22">&#9679;</span> Medium (&lt; 70%)<br>
+<span style="color:#c0392b">&#9679;</span> High (&ge; 70%)</div>"""))
 
     folium.GeoJson(
-        filtered[["id", "rank", "depth_m", "area_m2", "volume_m3", "severity", "geometry"]],
+        filtered[["id", "rank", "depth_m", "area_m2", "volume_m3", "fill_pct", "severity", "geometry"]],
         style_function=lambda ft: {"fillColor": COLORS[ft["properties"]["severity"]], "color": "white",
                                    "weight": 1.5, "fillOpacity": 0.65},
         highlight_function=lambda ft: {"weight": 3, "fillOpacity": 0.9},
-        tooltip=folium.GeoJsonTooltip(fields=["id", "rank", "depth_m", "area_m2", "volume_m3"],
-                                      aliases=["ID", "Rank", "Depth (m)", "Area (m2)", "Volume (m3)"]),
+        tooltip=folium.GeoJsonTooltip(fields=["id", "rank", "fill_pct", "depth_m", "area_m2", "volume_m3"],
+                                      aliases=["ID", "Rank", "Filled (%)", "Depth now (m)", "Area (m2)",
+                                               "Volume now (m3)"]),
     ).add_to(m)
 
     for _, r in filtered.iterrows():
@@ -335,12 +363,15 @@ path.leaflet-interactive {transform-box:fill-box; transform-origin:center; anima
                 [pt.y, pt.x],
                 icon=folium.DivIcon(html=f'<div class="pulse" style="--c:{COLORS[r["severity"]]};"></div>',
                                     icon_size=(14, 14), icon_anchor=(7, 7)),
-                tooltip=f"<b>{r['id']}</b> - Rank {r['rank']}<br>Depth: {r['depth_m']} m<br>Volume: {r['volume_m3']} m3",
+                tooltip=(f"<b>{r['id']}</b> - Rank {r['rank']}<br>Filled: {r['fill_pct']:.0f}%"
+                         f"<br>Depth now: {r['depth_m']} m<br>Volume now: {r['volume_m3']} m3"),
             ).add_to(m)
 
     Fullscreen().add_to(m)
     MiniMap(toggle_display=True).add_to(m)
     st_folium(m, height=560, use_container_width=True, returned_objects=[])
+    st.caption("Hotspots are places where water can pond. Colour shows how full each one is for the chosen "
+               "rainfall scenario (illustrative: assumed catchment, no infiltration or drainage).")
     if show_flow:
         st.caption("Flowing lines are illustrative until real flow-accumulation results replace them.")
 
@@ -348,13 +379,13 @@ with tab_chart:
     st.markdown('<div class="wave"></div>', unsafe_allow_html=True)
     left, right = st.columns(2)
     with left:
-        st.subheader("Volume by hotspot (m3)")
+        st.subheader("Volume now by hotspot (m3)")
         st.bar_chart(pd.DataFrame(filtered[["id", "volume_m3"]]).set_index("id"))
     with right:
-        st.subheader("Depth by hotspot (m)")
+        st.subheader("Depth now by hotspot (m)")
         st.bar_chart(pd.DataFrame(filtered[["id", "depth_m"]]).set_index("id"))
     st.subheader("Hotspots per severity level")
-    st.bar_chart(filtered["severity"].value_counts().reindex(["Low", "Medium", "High"]).fillna(0))
+    st.bar_chart(filtered["severity"].value_counts().reindex(["Dry", "Low", "Medium", "High"]).fillna(0))
 
 with tab_table:
     table = pd.DataFrame(filtered.drop(columns=["geometry", "is_sample"], errors="ignore"))
@@ -363,8 +394,9 @@ with tab_table:
         table, hide_index=True,
         column_config={
             "volume_m3": st.column_config.ProgressColumn(
-                "Volume (m3)", min_value=0.0, max_value=max(float(gdf["volume_m3"].max()), 1.0), format="%.1f"),
-            "depth_m": st.column_config.NumberColumn("Depth (m)", format="%.2f"),
+                "Volume now (m3)", min_value=0.0, max_value=max(float(full_vol.max()), 1.0), format="%.1f"),
+            "depth_m": st.column_config.NumberColumn("Depth now (m)", format="%.2f"),
+            "fill_pct": st.column_config.NumberColumn("Filled (%)", format="%.0f"),
         },
     )
     d1, d2 = st.columns(2)
@@ -379,3 +411,4 @@ with tab_metrics:
     for col, (lab, key) in zip(g[:4], [("Precision", "precision"), ("Recall", "recall"), ("F1", "f1"), ("IoU", "iou")]):
         col.markdown(gauge(lab, float(metrics[key])), unsafe_allow_html=True)
     g[4].markdown(card("DTM RMSE (m)", float(metrics["dtm_rmse_m"]), dec=True), unsafe_allow_html=True)
+    
